@@ -18,7 +18,7 @@ def main():
     loan_repo = JsonLoanRepository(json_data)
     loan_service = LoanService(loan_repo)
     patron_service = PatronService(patron_repo)
-    app = ConsoleApp(loan_service, patron_service, patron_repo, loan_repo)
+    app = ConsoleApp(loan_service, patron_service, patron_repo, loan_repo, json_data=json_data)
     app.run()
 
 if __name__ == "__main__":

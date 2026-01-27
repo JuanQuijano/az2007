@@ -4,6 +4,7 @@ from application_core.interfaces.ipatron_repository import IPatronRepository
 from application_core.interfaces.iloan_repository import ILoanRepository
 from application_core.interfaces.iloan_service import ILoanService
 from application_core.interfaces.ipatron_service import IPatronService
+from infrastructure.json_data import JsonData
 
 class ConsoleApp:
     def __init__(
@@ -11,7 +12,8 @@ class ConsoleApp:
         loan_service: ILoanService,
         patron_service: IPatronService,
         patron_repository: IPatronRepository,
-        loan_repository: ILoanRepository
+        loan_repository: ILoanRepository,
+        json_data: JsonData
     ):
         self._current_state: ConsoleState = ConsoleState.PATRON_SEARCH
         self.matching_patrons = []
@@ -21,6 +23,7 @@ class ConsoleApp:
         self._loan_repository = loan_repository
         self._loan_service = loan_service
         self._patron_service = patron_service
+        self._json_data = json_data
 
     def run(self) -> None:
         while True:
@@ -52,11 +55,15 @@ class ConsoleApp:
     def patron_search_results(self) -> ConsoleState:
         print("\nInput Options:")
         print(" - Type a number to select a patron from the list")
+        print(" - Type 'b' to check for book availability")
         print(" - Type 's' to search again")
         print(" - Type 'q' to quit")
         selection = input("Enter your choice: ").strip().lower()
         if selection == 'q':
             return ConsoleState.QUIT
+        elif selection == 'b':
+            action = CommonActions.SEARCH_BOOKS
+            return self._handle_common_action(action)
         elif selection == 's':
             return ConsoleState.PATRON_SEARCH
         elif selection.isdigit():
@@ -68,7 +75,79 @@ class ConsoleApp:
                 print("Invalid selection. Please enter a valid number.")
                 return ConsoleState.PATRON_SEARCH_RESULTS
         else:
-            print("Invalid input. Please enter a number, 's', or 'q'.")
+            print("Invalid input. Please enter a number, 'b', 's', or 'q'.")
+            return ConsoleState.PATRON_SEARCH_RESULTS
+
+    def _handle_common_action(self, action: CommonActions) -> ConsoleState:
+        if action == CommonActions.SEARCH_BOOKS:
+            return self.search_books()
+        return ConsoleState.PATRON_SEARCH_RESULTS
+
+    def search_books(self) -> ConsoleState:
+        while True:
+            title_input = input("Enter a book title to check availability: ").strip()
+            if not title_input:
+                print("No title provided. Please try again.")
+                return ConsoleState.PATRON_SEARCH_RESULTS
+
+            json_data = self._json_data or getattr(self._loan_repository, "_json_data", None)
+            if json_data is None:
+                print("Book data unavailable. Cannot check availability.")
+                return ConsoleState.PATRON_SEARCH_RESULTS
+
+            matching_books = [b for b in json_data.books if title_input.lower() in b.title.lower()]
+            if not matching_books:
+                print("No books found matching that title.")
+                retry = input("Press 's' to search again or any other key to return: ").strip().lower()
+                if retry == 's':
+                    continue
+                return ConsoleState.PATRON_SEARCH_RESULTS
+
+            selected_book = None
+            if len(matching_books) == 1:
+                selected_book = matching_books[0]
+            else:
+                print("Multiple books found:")
+                for idx, book in enumerate(matching_books, 1):
+                    print(f"{idx}) {book.title}")
+                choice = input("Enter a number to select a book, 'r' to refine, or any other key to return: ").strip().lower()
+                if choice == 'r':
+                    continue
+                if choice.isdigit():
+                    idx = int(choice)
+                    if 1 <= idx <= len(matching_books):
+                        selected_book = matching_books[idx - 1]
+                    else:
+                        print("Invalid selection. Returning to previous menu.")
+                        return ConsoleState.PATRON_SEARCH_RESULTS
+                else:
+                    return ConsoleState.PATRON_SEARCH_RESULTS
+
+            if selected_book is None:
+                return ConsoleState.PATRON_SEARCH_RESULTS
+
+            item_ids = [bi.id for bi in json_data.book_items if bi.book_id == selected_book.id]
+            if not item_ids:
+                print(f"{selected_book.title} has no copies in the catalog.")
+                next_step = input("Press 's' to search another book or any other key to return: ").strip().lower()
+                if next_step == 's':
+                    continue
+                return ConsoleState.PATRON_SEARCH_RESULTS
+
+            active_loans = [loan for loan in json_data.loans if loan.book_item_id in item_ids and loan.return_date is None]
+
+            if len(active_loans) < len(item_ids):
+                print(f"{selected_book.title} is available for loan.")
+            else:
+                earliest_due = min((loan.due_date for loan in active_loans if loan.due_date), default=None)
+                if earliest_due:
+                    print(f"{selected_book.title} is on loan to another patron. The return due date is {earliest_due}.")
+                else:
+                    print(f"{selected_book.title} is on loan to another patron.")
+
+            next_step = input("Press 's' to search another book or any other key to return: ").strip().lower()
+            if next_step == 's':
+                continue
             return ConsoleState.PATRON_SEARCH_RESULTS
 
     def patron_details(self) -> ConsoleState:

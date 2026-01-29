@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Library.Infrastructure.Data;
 using Library.ApplicationCore;
+using Library.ApplicationCore.Services;
 using Microsoft.Extensions.Configuration;
 
 var services = new ServiceCollection();

@@ -2,6 +2,7 @@
 using Library.ApplicationCore;
 using Library.ApplicationCore.Entities;
 using Library.ApplicationCore.Enums;
+using Library.ApplicationCore.Services;
 
 namespace Library.UnitTests.ApplicationCore.PatronServiceTests;
 

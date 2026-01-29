@@ -9,56 +9,36 @@ public class JsonPatronRepository : IPatronRepository
 
     public JsonPatronRepository(JsonData jsonData)
     {
-        _jsonData = jsonData;
+        _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
     }
 
     public async Task<List<Patron>> SearchPatrons(string searchInput)
     {
+        ArgumentNullException.ThrowIfNull(searchInput);
         await _jsonData.EnsureDataLoaded();
 
-        List<Patron> searchResults = new List<Patron>();
-        foreach (Patron patron in _jsonData.Patrons)
-        {
-            if (patron.Name.Contains(searchInput))
-            {
-                searchResults.Add(patron);
-            }
-        }
-        searchResults.Sort((p1, p2) => String.Compare(p1.Name, p2.Name));
+        var searchResults = _jsonData.Patrons!
+            .Where(patron => patron.Name.Contains(searchInput, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(patron => patron.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        searchResults = _jsonData.GetPopulatedPatrons(searchResults);
-
-        return searchResults;
+        return _jsonData.GetPopulatedPatrons(searchResults);
     }
 
     public async Task<Patron?> GetPatron(int id)
     {
         await _jsonData.EnsureDataLoaded();
 
-        foreach (Patron patron in _jsonData.Patrons!)
-        {
-            if (patron.Id == id)
-            {
-                Patron populated = _jsonData.GetPopulatedPatron(patron);
-                return populated;
-            }
-        }
-        return null;
+        var patron = _jsonData.Patrons!.FirstOrDefault(p => p.Id == id);
+        return patron != null ? _jsonData.GetPopulatedPatron(patron) : null;
     }
 
     public async Task UpdatePatron(Patron patron)
     {
+        ArgumentNullException.ThrowIfNull(patron);
         await _jsonData.EnsureDataLoaded();
-        var patrons = _jsonData.Patrons!;
-        Patron existingPatron = null;
-        foreach (var p in patrons)
-        {
-            if (p.Id == patron.Id)
-            {
-                existingPatron = p;
-                break;
-            }
-        }
+        
+        var existingPatron = _jsonData.Patrons!.FirstOrDefault(p => p.Id == patron.Id);
         if (existingPatron != null)
         {
             existingPatron.Name = patron.Name;
@@ -66,7 +46,7 @@ public class JsonPatronRepository : IPatronRepository
             existingPatron.MembershipStart = patron.MembershipStart;
             existingPatron.MembershipEnd = patron.MembershipEnd;
             existingPatron.Loans = patron.Loans;
-            await _jsonData.SavePatrons(patrons);
+            await _jsonData.SavePatrons(_jsonData.Patrons!);
             await _jsonData.LoadData();
         }
     }

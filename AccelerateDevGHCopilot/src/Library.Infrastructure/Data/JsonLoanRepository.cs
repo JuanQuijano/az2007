@@ -9,35 +9,23 @@ public class JsonLoanRepository : ILoanRepository
 
     public JsonLoanRepository(JsonData jsonData)
     {
-        _jsonData = jsonData;
+        _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
     }
 
     public async Task<Loan?> GetLoan(int id)
     {
         await _jsonData.EnsureDataLoaded();
 
-        foreach (Loan loan in _jsonData.Loans!)
-        {
-            if (loan.Id == id)
-            {
-                Loan populated = _jsonData.GetPopulatedLoan(loan);
-                return populated;
-            }
-        }
-        return null;
+        var loan = _jsonData.Loans!.FirstOrDefault(l => l.Id == id);
+        return loan != null ? _jsonData.GetPopulatedLoan(loan) : null;
     }
 
     public async Task UpdateLoan(Loan loan)
     {
-        Loan? existingLoan = null;
-        foreach (Loan l in _jsonData.Loans!)
-        {
-            if (l.Id == loan.Id)
-            {
-                existingLoan = l;
-                break;
-            }
-        }
+        ArgumentNullException.ThrowIfNull(loan);
+        await _jsonData.EnsureDataLoaded();
+        
+        var existingLoan = _jsonData.Loans!.FirstOrDefault(l => l.Id == loan.Id);
 
         if (existingLoan != null)
         {

@@ -1,14 +1,22 @@
-using Library.ApplicationCore;
 using Library.ApplicationCore.Entities;
 using Library.ApplicationCore.Enums;
 
+namespace Library.ApplicationCore.Services;
+
 public class LoanService : ILoanService
 {
-    private ILoanRepository _loanRepository;
+    private readonly ILoanRepository _loanRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public LoanService(ILoanRepository loanRepository)
+        : this(loanRepository, new SystemDateTimeProvider())
     {
-        _loanRepository = loanRepository;
+    }
+
+    public LoanService(ILoanRepository loanRepository, IDateTimeProvider dateTimeProvider)
+    {
+        _loanRepository = loanRepository ?? throw new ArgumentNullException(nameof(loanRepository));
+        _dateTimeProvider = dateTimeProvider ?? throw new ArgumentNullException(nameof(dateTimeProvider));
     }
 
     public async Task<LoanReturnStatus> ReturnLoan(int loanId)
@@ -25,13 +33,13 @@ public class LoanService : ILoanService
             return LoanReturnStatus.AlreadyReturned;
         }
 
-        loan.ReturnDate = DateTime.Now;
+        loan.ReturnDate = _dateTimeProvider.Now;
         try
         {
             await _loanRepository.UpdateLoan(loan);
             return LoanReturnStatus.Success;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return LoanReturnStatus.Error;
         }
@@ -47,13 +55,13 @@ public class LoanService : ILoanService
             return LoanExtensionStatus.LoanNotFound;
 
         // Check if patron's membership is expired
-        if (loan.Patron!.MembershipEnd < DateTime.Now)
+        if (loan.Patron!.MembershipEnd < _dateTimeProvider.Now)
             return LoanExtensionStatus.MembershipExpired;
 
         if (loan.ReturnDate != null)
             return LoanExtensionStatus.LoanReturned;
 
-        if (loan.DueDate < DateTime.Now)
+        if (loan.DueDate < _dateTimeProvider.Now)
             return LoanExtensionStatus.LoanExpired;
 
         loan.DueDate = loan.DueDate.AddDays(ExtendByDays);
@@ -62,7 +70,7 @@ public class LoanService : ILoanService
             await _loanRepository.UpdateLoan(loan);
             return LoanExtensionStatus.Success;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return LoanExtensionStatus.Error;
         }
